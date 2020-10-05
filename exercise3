@@ -1,0 +1,53 @@
+import numpy as np
+import pandas as pd
+
+event_log = pd.read_csv('C:/Users/admin/Desktop/Large.csv')
+
+df = event_log[['Case ID', 'Activity', 'Complete Timestamp']]
+df = df.rename(columns={"Case ID": 'caseid', "Activity": "activity", "Complete Timestamp": "ts"})
+##If the data is different, just rename and complete the code to make it work. One solution is enough.
+
+from sklearn import preprocessing
+encoder = preprocessing.LabelEncoder()
+activity_ids = encoder.fit_transform(df.activity)
+df.activity = activity_ids
+
+def get_classes(classes):
+  res = []
+  for c in classes:
+    if c in res:
+      continue
+    res.append(c)
+  return res
+
+def make_dataset(df, w_size):
+  res = []
+  for case in get_classes(df.caseid):
+    cur_case = df.loc[ df.caseid == case ]
+    if cur_case.shape[0] - w_size - 1 <= 0:
+      continue
+    for i in range(cur_case.shape[0]-w_size-1):
+      window = cur_case.iloc[i:i+w_size]
+      events = window.activity
+      duration = (pd.to_datetime(window.ts.iloc[-1])-pd.to_datetime(window.ts.iloc[0])).total_seconds()
+      next_event = cur_case.activity.iloc[i+w_size]
+      res.append([case, *events, duration, next_event])
+
+  res = pd.DataFrame(res, columns=['case_id', 'event_1', 'event_2', 'event_3', 'duration', 'next_event'])
+  return res
+
+a = make_dataset(df, 3)
+
+from sklearn.model_selection import train_test_split
+x_train, x_test, y_train, y_test = train_test_split(a[["event_1", "event_2", "event_3", "duration"]].values, a["next_event"].values.reshape(-1, 1), test_size=0.3, random_state=1234)
+
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
+dt_pipe = Pipeline([("scaler", StandardScaler()), ("dt", DecisionTreeRegressor(max_depth=5, random_state=1234))])
+gbr_pipe = Pipeline([("scaler", StandardScaler()), ("gbr", GradientBoostingRegressor(max_depth=3, random_state=1234))])
+
+dt_pipe.score(x_test, y_test)
+gbr_pipe.score(x_test, y_test)
